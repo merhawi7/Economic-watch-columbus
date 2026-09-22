@@ -1,0 +1,5 @@
+*.class
+*.backup
+*.backup2
+*.dat
+EmailRecipients.txt

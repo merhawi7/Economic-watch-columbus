@@ -1,0 +1,16 @@
+ECONOMIC WATCH
+
+Go to project:
+cd "C:\Users\meraf\Downloads\Economic-watch-columbus-main\Economic-watch-columbus-main"
+
+Compile:
+javac -encoding UTF-8 *.java
+
+Run:
+java EconomicWatchApp
+
+Send email:
+Choose 5
+
+Update live data:
+Choose 2
