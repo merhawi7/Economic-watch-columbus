@@ -186,8 +186,11 @@ public class EconomicWatchApp {
 
             int year = LocalDate.now().getYear();
 
+            // CHANGED: COLU139URN (not seasonally adjusted) is the series BLS
+            // reports for Columbus. The old COLU139UR (smoothed, seasonally
+            // adjusted) series can lag by months.
             double unemployment =
-                    FredApi.getLatestValue("COLU139UR");
+                    FredApi.getLatestValue("COLU139URN");
 
             System.out.printf(
                     "Columbus unemployment: %.1f%%%n",
@@ -249,8 +252,11 @@ public class EconomicWatchApp {
                     inflation
             );
 
+            // CHANGED: DFF is the daily effective federal funds rate.
+            // The old FEDFUNDS series is a monthly average that lags
+            // right after the Fed changes rates.
             double fedFunds =
-                    FredApi.getLatestValue("FEDFUNDS");
+                    FredApi.getLatestValue("DFF");
 
             System.out.printf(
                     "Federal funds rate: %.2f%%%n",
