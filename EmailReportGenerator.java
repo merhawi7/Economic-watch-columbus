@@ -8,7 +8,10 @@ public class EmailReportGenerator {
 
         LocalDate date = snapshot.getRecordedOn();
 
-        // LIVE VALUES — unchanged
+        // LIVE VALUES (from FRED)
+        // unemployment = Columbus, OH metro area (not seasonally adjusted)
+        // gdp, inflation, fedFunds, mortgage = U.S. national
+        // homePriceIndex = Columbus house price index
         double unemployment = snapshot.getUnemploymentRatePct();
         double gdp = snapshot.getGdpGrowthPct();
         double inflation = snapshot.getInflationPct();
@@ -16,13 +19,15 @@ public class EmailReportGenerator {
         double mortgage = snapshot.getMortgageRatePct();
         double homePriceIndex = snapshot.getHomePriceIndex();
 
-        // CENTRAL OHIO REFERENCE VALUES — unchanged
+        // CENTRAL OHIO REFERENCE VALUES (not live; update by hand and check the source)
+        // Home price: Columbus REALTORS(R) Central Ohio median sales price, July 2026
+        // Median rent: Apartment List Rent Index, Columbus city, August 2026
+        // Inventory, months supply, days on market: Central Ohio MLS reference figures
         int centralOhioInventory = 6193;
         double monthsSupply = 2.4;
         String daysOnMarket = "~42-44 days";
-        String priceReductions = "~28%";
-        String medianRent = "~$1,650";
-        String homePriceReference = "~$300K";
+        String medianRent = "~$1,308";
+        String homePriceReference = "~$350K";
 
         // ORIGINAL REPORT SCORES — unchanged
         int economicRisk = 18;
@@ -598,13 +603,13 @@ tr:hover td {
         </div>
 
         <div class="live-pill">
-            ● LIVE REPORT
+            ● WEEKLY REPORT / ሰሙናዊ ጸብጻብ
         </div>
 
     </div>
 
     <div class="hero-date">
-        Monthly economic intelligence report
+        Weekly economic intelligence report / ሰሙናዊ ኢኮኖሚያዊ ጸብጻብ
     </div>
 
 </div>
@@ -650,7 +655,7 @@ tr:hover td {
     <div class="metric-card green">
 
         <div class="metric-label">
-            Unemployment
+            Columbus Unemployment
         </div>
 
         <div class="metric-value">
@@ -676,7 +681,7 @@ tr:hover td {
     <div class="metric-card orange">
 
         <div class="metric-label">
-            Mortgage Rate
+            U.S. Mortgage Rate
         </div>
 
         <div class="metric-value">
@@ -694,7 +699,7 @@ tr:hover td {
         </div>
 
         <div class="metric-note">
-            30-year rate
+            30-year rate, U.S. / ኣመሪካ
         </div>
 
     </div>
@@ -823,12 +828,12 @@ Challenging / ኣሸጋሪ
 
 </tr>
 
-<!-- Unemployment -->
+<!-- Unemployment (Columbus) -->
 
 <tr>
 
 <td>
-Unemployment / ስራሕ ኣልቦነት
+Columbus Unemployment Rate / ስራሕ ኣልቦነት ኮሎምበስ
 </td>
 
 <td class="value">
@@ -850,38 +855,6 @@ Unemployment / ስራሕ ኣልቦነት
 """);
 
         html.append(unemploymentStatus);
-
-        html.append("""
-</span>
-</td>
-
-</tr>
-
-<!-- Job Growth -->
-
-<tr>
-
-<td>
-Job Growth / ዕቤት ስራሕ
-</td>
-
-<td class="value">
-""");
-
-        html.append(
-                gdp >= 0
-                        ? "Positive"
-                        : "Negative"
-        );
-
-        html.append("""
-</td>
-
-<td>
-<span class="status good">
-""");
-
-        html.append(gdpStatus);
 
         html.append("""
 </span>
@@ -967,7 +940,7 @@ Months Supply / ናይ ወርሒ ኣቕርቦት
 
 <td>
 <span class="status caution">
-Caution / ጥንቃቐ
+Low supply / ውሑድ ኣቕርቦት
 </span>
 </td>
 
@@ -997,36 +970,12 @@ Improving / ይመሓየሽ ኣሎ
 
 </tr>
 
-<!-- Price Reductions -->
+<!-- Mortgage (U.S.) -->
 
 <tr>
 
 <td>
-Price Reductions / ምንካይ ዋጋ
-</td>
-
-<td class="value">
-""");
-
-        html.append(priceReductions);
-
-        html.append("""
-</td>
-
-<td>
-<span class="status improving">
-Buyer advantage
-</span>
-</td>
-
-</tr>
-
-<!-- Mortgage -->
-
-<tr>
-
-<td>
-Mortgage Rate / ወለድ ሞርጌጅ
+U.S. 30-Year Mortgage Rate / ወለድ ሞርጌጅ ኣመሪካ
 </td>
 
 <td class="value">
@@ -1109,12 +1058,12 @@ Latest / ሓድሽ
 
 </tr>
 
-<!-- Inflation -->
+<!-- Inflation (U.S.) -->
 
 <tr>
 
 <td>
-Inflation / ዕቤት ዋጋ
+U.S. Inflation / ዕቤት ዋጋ ኣመሪካ
 </td>
 
 <td class="value">
@@ -1143,12 +1092,12 @@ Inflation / ዕቤት ዋጋ
 
 </tr>
 
-<!-- GDP -->
+<!-- GDP (U.S.) -->
 
 <tr>
 
 <td>
-GDP Growth / ዕቤት GDP
+U.S. GDP Growth / ዕቤት GDP ኣመሪካ
 </td>
 
 <td class="value">
@@ -1177,7 +1126,7 @@ GDP Growth / ዕቤት GDP
 
 </tr>
 
-<!-- Federal Funds -->
+<!-- Federal Funds (U.S.) -->
 
 <tr>
 
@@ -1389,6 +1338,11 @@ National / ሃገራዊ
         <strong>LIVE DATA:</strong>
         Economic indicators connected to the application
         are retrieved from FRED when the report is generated.
+        Unemployment is for the Columbus, OH metro area
+        (BLS, not seasonally adjusted). Inflation, GDP growth,
+        the 30-year mortgage rate (Freddie Mac) and the
+        federal funds rate (daily effective rate) are
+        U.S. national figures.
     </p>
 
     <p>
@@ -1396,16 +1350,28 @@ National / ሃገራዊ
         እቶም ናብ መተግበሪ ዝተኣሳሰሩ
         ኢኮኖሚያዊ መለክዒታት እቲ ሪፖርት
         ክፍጠር ከሎ ካብ FRED ይውሰዱ።
+        ስራሕ ኣልቦነት ናይ ኮሎምበስን ከባብያን እዩ፣
+        ዕቤት ዋጋ፣ GDP፣ ወለድ ሞርጌጅን Federal Fundsን
+        ሃገራዊ (ኣመሪካ) እዮም።
     </p>
 
     <p>
         <strong>CENTRAL OHIO MLS:</strong>
-        The 6,193 inventory, 2.4 months supply,
-        approximately 42-44 days on market,
-        approximately 28% price reductions, and
-        approximately $1,650 median rent are
-        Central Ohio/local reference figures.
-        They are not currently live-connected to FRED.
+        The 6,193 inventory, 2.4 months supply and
+        approximately 42-44 days on market are
+        Central Ohio/local reference figures. They are not
+        currently live-connected to FRED and may lag.
+        The ~$350K home price is the Central Ohio median
+        sales price for July 2026 (Columbus REALTORS&reg;).
+        The ~$1,308 median rent is the Columbus city median
+        for August 2026 (Apartment List).
+    </p>
+
+    <p>
+        <strong>ምንጪ:</strong>
+        ዋጋ ገዛ፣ ክራይ፣ ብዝሒ ገዛውቲ፣ ናይ ወርሒ ኣቕርቦትን
+        መዓልታት ኣብ ዕዳጋን ካብ ማእከላይ ኦሃዮ ዝተወስዱ
+        መወከሲ ሓበሬታ እዮም፣ ቀጥታ ካብ FRED ኣይኮኑን።
     </p>
 
     <p>
@@ -1440,11 +1406,11 @@ National / ሃገራዊ
     </div>
 
     <div class="footer-small">
-        Columbus, Ohio • Automated Monthly Economic Report
+        Columbus, Ohio • Automated Weekly Economic Report
     </div>
 
     <div class="footer-small">
-      ሕራመ ኢኮኖሚያዊ ክትትል • ሓወልቲ ሓበሬታ
+      ኢኮኖሚያዊ ምልከታ • ኮሎምበስ፣ ኦሃዮ • ሰሙናዊ ጸብጻብ
     </div>
 
 </div>
