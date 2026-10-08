@@ -4,6 +4,8 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -149,5 +151,71 @@ public class FredApi {
         throw new IOException(
                 "FRED returned no usable value for series " + seriesId
         );
+    }
+
+    /**
+     * Reads the observations in a FRED response (newest first)
+     * and skips missing values. Each entry is {date, value}.
+     */
+    private static List<String[]> parseObservations(String json) {
+
+        List<String[]> result = new ArrayList<>();
+
+        Pattern pattern = Pattern.compile(
+                "\"date\":\"([^\"]+)\",\\s*\"value\":\"([^\"]+)\""
+        );
+
+        Matcher matcher = pattern.matcher(json);
+
+        while (matcher.find()) {
+
+            String value = matcher.group(2);
+
+            if (value.equals(".") || value.equals("..")) {
+                continue;
+            }
+
+            result.add(new String[] { matcher.group(1), value });
+        }
+
+        return result;
+    }
+
+    /**
+     * Date (yyyy-MM-dd) of the newest real observation in the series.
+     * Used so the report can say how old each number is.
+     */
+    public static String getLatestDate(String seriesId)
+            throws IOException, InterruptedException {
+
+        List<String[]> obs = parseObservations(getSeries(seriesId));
+
+        if (obs.isEmpty()) {
+            throw new IOException(
+                    "FRED returned no usable date for series " + seriesId
+            );
+        }
+
+        return obs.get(0)[0];
+    }
+
+    /**
+     * The newest 'count' real values, newest first.
+     * Used to see whether a series is rising or falling.
+     */
+    public static double[] getRecentValues(String seriesId, int count)
+            throws IOException, InterruptedException {
+
+        List<String[]> obs = parseObservations(getSeries(seriesId));
+
+        int n = Math.min(count, obs.size());
+
+        double[] values = new double[n];
+
+        for (int i = 0; i < n; i++) {
+            values[i] = Double.parseDouble(obs.get(i)[1]);
+        }
+
+        return values;
     }
 }
