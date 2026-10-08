@@ -67,7 +67,7 @@ public class EmailReportGenerator {
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Economic Watch - Columbus, Ohio</title>
 <style>
-* { box-sizing: border-box; }
+- { box-sizing: border-box; }
 body { margin: 0; padding: 0; background: #f4f7fa; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: #1e293b; line-height: 1.6; }
 .container { max-width: 920px; margin: 32px auto; background: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 12px 40px rgba(15, 23, 42, 0.08); border: 1px solid #e2e8f0; }
 .hero { background: linear-gradient(135deg, #0f172a, #1e3a8a 60%, #2563eb); color: white; padding: 40px 36px 36px; }
