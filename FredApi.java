@@ -22,12 +22,15 @@ public class FredApi {
             );
         }
 
+        // limit=10 (was 1): FRED sometimes returns "." for the newest
+        // observation when data is not published yet. Fetching a few
+        // lets getLatestValue skip those and use the newest real value.
         String url = "https://api.stlouisfed.org/fred/series/observations"
                 + "?series_id=" + seriesId
                 + "&api_key=" + apiKey
                 + "&file_type=json"
                 + "&sort_order=desc"
-                + "&limit=1";
+                + "&limit=10";
 
         HttpClient client = HttpClient.newHttpClient();
 
@@ -130,20 +133,21 @@ public class FredApi {
 
         Matcher matcher = pattern.matcher(json);
 
-        if (!matcher.find()) {
-            throw new IOException(
-                    "Could not find a value in FRED response."
-            );
+        // Observations are newest-first. Skip missing values (".")
+        // and return the newest real one.
+        while (matcher.find()) {
+
+            String value = matcher.group(1);
+
+            if (value.equals(".") || value.equals("..")) {
+                continue;
+            }
+
+            return Double.parseDouble(value);
         }
 
-        String value = matcher.group(1);
-
-        if (value.equals(".") || value.equals("..")) {
-            throw new IOException(
-                    "FRED returned a missing value."
-            );
-        }
-
-        return Double.parseDouble(value);
+        throw new IOException(
+                "FRED returned no usable value for series " + seriesId
+        );
     }
 }
