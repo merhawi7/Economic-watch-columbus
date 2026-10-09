@@ -18,6 +18,18 @@ public class EmailReportGenerator {
         double mortgage = snapshot.getMortgageRatePct();
         double homePriceIndex = snapshot.getHomePriceIndex();
 
+        // U.S. NATIONAL UNEMPLOYMENT (FRED series UNRATE), shown separately
+        // so it can't be confused with the Columbus metro rate.
+        boolean usUnempOk = false;
+        double usUnemployment = 0.0;
+
+        try {
+            usUnemployment = FredApi.getLatestValue("UNRATE");
+            usUnempOk = true;
+        } catch (Exception e) {
+            // show n/a below
+        }
+
         // CENTRAL OHIO REFERENCE VALUES (not live; update by hand and check the source)
         // Home price: Columbus REALTORS(R) Central Ohio median sales price, July 2026
         // Median rent: Apartment List Rent Index, Columbus city, August 2026
@@ -34,9 +46,9 @@ public class EmailReportGenerator {
         int affordability = 75;
 
         // FEDERAL FUNDS: show the target range, plus the effective rate.
-        // Falls back to the effective rate alone if the range is unavailable.
         String fedValue;
-        String fedNote;
+        String fedNoteEn;
+        String fedNoteTi;
 
         try {
             double upper = FredApi.getLatestValue("DFEDTARU");
@@ -45,14 +57,19 @@ public class EmailReportGenerator {
             fedValue = String.format(
                     Locale.US, "%.2f%% &ndash; %.2f%%", lower, upper);
 
-            fedNote = String.format(
+            fedNoteEn = String.format(
                     Locale.US,
                     "Target range. Effective rate: %.2f%%",
+                    fedFunds);
+            fedNoteTi = String.format(
+                    Locale.US,
+                    "ዕላማ ወሰን። ውጽኢታዊ መጠን: %.2f%%",
                     fedFunds);
 
         } catch (Exception e) {
             fedValue = String.format(Locale.US, "%.2f%%", fedFunds);
-            fedNote = "Daily effective rate";
+            fedNoteEn = "Daily effective rate";
+            fedNoteTi = "ዕለታዊ ውጽኢታዊ መጠን";
         }
 
         // MORTGAGE DIRECTION: compare the two newest weekly readings.
@@ -81,24 +98,17 @@ public class EmailReportGenerator {
             // keep the neutral default
         }
 
-        // DATA AS OF: the date of the newest observation FRED has for each series.
+        // DATA AS OF: newest observation date FRED has for each series.
         String hpiAsOf = asOf("ATNHPIUS18140Q", "quarter");
-
-        String asOfLine =
-                "Columbus unemployment: " + asOf("COLU139URN", "month")
-                        + " &bull; Columbus Home Price Index: " + hpiAsOf
-                        + " &bull; U.S. GDP growth: "
-                        + asOf("A191RL1Q225SBEA", "quarter")
-                        + " &bull; U.S. CPI inflation: "
-                        + asOf("CPIAUCSL", "month")
-                        + " &bull; U.S. 30-year mortgage rate: "
-                        + asOf("MORTGAGE30US", "day")
-                        + " &bull; Federal funds rate: "
-                        + asOf("DFF", "day");
 
         String unemploymentStatus =
                 unemployment < 5.0
                         ? "Low / ትሑት"
+                        : "Elevated / ልዑል";
+
+        String usUnemploymentStatus =
+                usUnemployment < 4.5
+                        ? "Moderate / ማእከላይ"
                         : "Elevated / ልዑል";
 
         String gdpStatus =
@@ -124,400 +134,261 @@ public class EmailReportGenerator {
                         )
                 );
 
-        StringBuilder html = new StringBuilder();
-
-        html.append("""
-<!DOCTYPE html>
-<html>
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Economic Watch - Columbus, Ohio</title>
-<style>
-* { box-sizing: border-box; }
-body { margin: 0; padding: 0; background: #f4f7fa; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: #1e293b; line-height: 1.6; }
-.container { max-width: 920px; margin: 32px auto; background: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 12px 40px rgba(15, 23, 42, 0.08); border: 1px solid #e2e8f0; }
-.hero { background: linear-gradient(135deg, #0f172a, #1e3a8a 60%, #2563eb); color: white; padding: 40px 36px 36px; }
-.hero-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; }
-.logo { font-size: 12px; font-weight: 800; letter-spacing: 2.5px; color: #93c5fd; margin-bottom: 10px; text-transform: uppercase; }
-.hero h1 { margin: 0; font-size: 30px; font-weight: 700; }
-.hero-subtitle { margin-top: 8px; color: #cbd5e1; font-size: 15px; }
-.hero-tigrinya { margin-top: 4px; color: #93c5fd; font-size: 14px; font-weight: 500; }
-.report-pill { background: rgba(255, 255, 255, 0.12); border: 1px solid rgba(255, 255, 255, 0.2); color: #ffffff; border-radius: 20px; padding: 8px 14px; font-size: 12px; font-weight: 700; }
-.hero-date { margin-top: 24px; color: #93c5fd; font-size: 13px; font-weight: 500; }
-.content { padding: 32px 36px 40px; }
-.section-title { display: flex; align-items: center; gap: 12px; margin: 36px 0 18px; }
-.section-line { height: 4px; width: 36px; background: #2563eb; border-radius: 4px; }
-.section-title h2 { margin: 0; color: #0f172a; font-size: 18px; font-weight: 700; }
-.metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin: 24px 0 32px; }
-.metric-card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 20px; position: relative; }
-.metric-card::before { content: ""; position: absolute; top: 0; left: 0; width: 100%; height: 4px; background: #2563eb; }
-.metric-card.green::before { background: #16a34a; }
-.metric-card.orange::before { background: #ea580c; }
-.metric-label { color: #64748b; font-size: 11px; font-weight: 700; text-transform: uppercase; }
-.metric-value { margin-top: 8px; font-size: 26px; font-weight: 800; color: #0f172a; }
-.metric-note { margin-top: 4px; font-size: 12px; color: #64748b; }
-.updated { background: #f1f5f9; border: 1px solid #cbd5e1; border-left: 4px solid #0f172a; border-radius: 8px; padding: 12px 16px; margin-bottom: 28px; font-size: 13px; display: flex; justify-content: space-between; }
-.updated-title { font-weight: 700; color: #334155; }
-.table-wrap { overflow-x: auto; border: 1px solid #e2e8f0; border-radius: 12px; background: #ffffff; }
-table { border-collapse: collapse; width: 100%; min-width: 650px; font-size: 14px; }
-th { background: #0f172a; color: white; padding: 14px 16px; text-align: left; font-size: 12px; font-weight: 600; }
-td { padding: 13px 16px; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
-tr:nth-child(even) td { background: #fafafa; }
-.value { font-weight: 700; color: #0f172a; }
-.src { display: block; margin-top: 3px; font-size: 11px; font-weight: normal; color: #64748b; }
-.status { display: inline-block; padding: 5px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; }
-.low, .good { background: #dcfce7; color: #166534; }
-.improving { background: #e0f2fe; color: #0369a1; }
-.caution { background: #fef9c3; color: #854d0e; }
-.high { background: #fee2e2; color: #991b1b; }
-.orange { background: #ffedd5; color: #9a3412; }
-.neutral { background: #f1f5f9; color: #475569; }
-.pulse { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-top: 20px; }
-.pulse-item { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px 10px; text-align: center; }
-.pulse-arrow { font-size: 20px; font-weight: bold; color: #2563eb; }
-.pulse-label { margin-top: 6px; font-size: 11px; color: #475569; font-weight: 700; }
-.pulse-word { margin-top: 3px; font-size: 11px; color: #475569; }
-.pulse-note { margin-top: 10px; font-size: 12px; color: #64748b; }
-.meaning-box { display: grid; gap: 10px; margin-top: 18px; }
-.meaning-row { border-radius: 10px; padding: 12px 16px; font-size: 14px; }
-.meaning-green { background: #f0fdf4; border: 1px solid #bbf7d0; color: #166534; }
-.meaning-yellow { background: #fefce8; border: 1px solid #fef08a; color: #854d0e; }
-.meaning-red { background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; }
-.meaning-orange { background: #fff7ed; border: 1px solid #fed7aa; color: #9a3412; }
-.bottom-line { margin-top: 20px; background: linear-gradient(135deg, #f0fdf4, #f8fafc); border: 1px solid #bbf7d0; border-left: 5px solid #16a34a; border-radius: 12px; padding: 24px; }
-.bottom-line-title { color: #166534; font-size: 17px; font-weight: 800; margin-bottom: 8px; text-transform: uppercase; }
-.note { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 20px; margin-top: 20px; font-size: 13px; color: #475569; }
-.note p { margin: 0 0 12px; }
-.footer { background: #f8fafc; border-top: 1px solid #e2e8f0; text-align: center; padding: 28px 20px; color: #64748b; font-size: 12px; }
-.footer-brand { color: #0f172a; font-size: 13px; font-weight: 800; letter-spacing: 1.5px; text-transform: uppercase; }
-</style>
-</head>
-<body>
-<div class="container">
-<div class="hero">
-    <div class="hero-top">
-        <div>
-            <div class="logo">ECONOMIC WATCH</div>
-            <h1>Columbus Economic Snapshot</h1>
-            <div class="hero-subtitle">Columbus, Ohio — Local Economic & Housing Monitor</div>
-            <div class="hero-tigrinya">ኮሎምበስ፣ ኦሃዮ — ኢኮኖሚያዊን ናይ ገዛን ምልከታ</div>
-        </div>
-        <div class="report-pill">● WEEKLY REPORT / ሰሙናዊ ጸብጻብ</div>
-    </div>
-    <div class="hero-date">Weekly report, latest available data / ሰሙናዊ ጸብጻብ፣ ናይ ሕጂ ዝርከብ ሓበሬታ</div>
-</div>
-
-<div class="content">
-<div class="updated">
-    <div class="updated-title">Updated / ዝተሓደሰ</div>
-    <div class="updated-date">""");
-
-        html.append(dateText);
-
-        html.append("""
-    </div>
-</div>
-
-<div class="section-title">
-    <div class="section-line"></div>
-    <h2>Key Indicators / ቀንዲ መለክዒታት</h2>
-</div>
-
-<div class="metrics">
-    <div class="metric-card green">
-        <div class="metric-label">Columbus Unemployment</div>
-        <div class="metric-value">""");
-
-        html.append(String.format(Locale.US, "%.1f%%", unemployment));
-
-        html.append("""
-        </div>
-        <div class="metric-note">Columbus / ኮሎምበስ</div>
-    </div>
-    <div class="metric-card orange">
-        <div class="metric-label">U.S. Mortgage Rate</div>
-        <div class="metric-value">""");
-
-        html.append(String.format(Locale.US, "%.2f%%", mortgage));
-
-        html.append("""
-        </div>
-        <div class="metric-note">30-year fixed, U.S. / ኣመሪካ</div>
-    </div>
-    <div class="metric-card">
-        <div class="metric-label">Home Price Index</div>
-        <div class="metric-value">""");
-
-        html.append(String.format(Locale.US, "%.2f", homePriceIndex));
-
-        html.append("""
-        </div>
-        <div class="metric-note">Columbus HPI (quarterly index)</div>
-    </div>
-</div>
-
-<div class="section-title">
-    <div class="section-line"></div>
-    <h2>Economic Snapshot / ኢኮኖሚያዊ ሓፈሻ</h2>
-</div>
-
-<div class="table-wrap">
-<table>
-<tr>
-    <th>Indicator / መለክዒ</th>
-    <th>Current / ሕጂ</th>
-    <th>Status / ኩነታት</th>
-</tr>
-<tr>
-    <td>Economic Risk Score / ነጥቢ ኢኮኖሚያዊ ሓደጋ<span class="src">Economic Watch indicator, not an official statistic</span></td>
-    <td class="value">""");
-
-        html.append(economicRisk).append("/100");
-
-        html.append("""
-    </td>
-    <td><span class="status low">Low / ትሑት</span></td>
-</tr>
-<tr>
-    <td>Buyer Leverage Score / ነጥቢ ሓይሊ ገዛእቲ ገዛ<span class="src">Economic Watch indicator, not an official statistic</span></td>
-    <td class="value">""");
-
-        html.append(buyerLeverage).append("/100");
-
-        html.append("""
-    </td>
-    <td><span class="status improving">Improving / ይመሓየሽ ኣሎ</span></td>
-</tr>
-<tr>
-    <td>Affordability Score / ነጥቢ ዓቕሚ ክፍሊት<span class="src">Economic Watch indicator, not an official statistic</span></td>
-    <td class="value">""");
-
-        html.append(affordability).append("/100");
-
-        html.append("""
-    </td>
-    <td><span class="status orange">Challenging / ኣሸጋሪ</span></td>
-</tr>
-<tr>
-    <td>Columbus Unemployment Rate / ስራሕ ኣልቦነት ኮሎምበስ</td>
-    <td class="value">""");
-
-        html.append(String.format(Locale.US, "%.1f%%", unemployment));
-
-        html.append("""
-    </td>
-    <td><span class="status low">""");
-
-        html.append(unemploymentStatus);
-
-        html.append("""
-    </span></td>
-</tr>
-<tr>
-    <td>Columbus Home Price / ዋጋ ገዛ ኮሎምበስ<span class="src">Median sale price, Central Ohio, July 2026 (Columbus REALTORS&reg;)</span></td>
-    <td class="value">""");
-
-        html.append(homePriceReference);
-
-        html.append("""
-    </td>
-    <td><span class="status neutral">Stable / ዝተረጋጋ</span></td>
-</tr>
-<tr>
-    <td>Central Ohio Inventory / ብዝሒ ዘሎ ገዛውቲ<span class="src">Central Ohio MLS reference figure, not live</span></td>
-    <td class="value">""");
-
-        html.append(String.format(Locale.US, "%,d", centralOhioInventory));
-
-        html.append("""
-    </td>
-    <td><span class="status improving">Improving / ይውስኽ ኣሎ</span></td>
-</tr>
-<tr>
-    <td>Months Supply / ናይ ወርሒ ኣቕርቦት<span class="src">Central Ohio MLS reference figure, not live</span></td>
-    <td class="value">""");
-
-        html.append(String.format(Locale.US, "%.1f months", monthsSupply));
-
-        html.append("""
-    </td>
-    <td><span class="status caution">Low supply / ውሑድ ኣቕርቦት</span></td>
-</tr>
-<tr>
-    <td>Days on Market / ኣብ ዕዳጋ ዝጸንሓሉ መዓልታት<span class="src">Central Ohio MLS reference figure, not live</span></td>
-    <td class="value">""");
-
-        html.append(daysOnMarket);
-
-        html.append("""
-    </td>
-    <td><span class="status improving">Improving / ይመሓየሽ ኣሎ</span></td>
-</tr>
-<tr>
-    <td>U.S. 30-Year Mortgage Rate / ወለድ ሞርጌጅ ኣመሪካ</td>
-    <td class="value">""");
-
-        html.append(String.format(Locale.US, "%.2f%%", mortgage));
-
-        html.append("""
-    </td>
-    <td><span class="status high">""");
-
-        html.append(mortgageStatus);
-
-        html.append("""
-    </span></td>
-</tr>
-<tr>
-    <td>Median Rent / ማእከላይ ክራይ<span class="src">Columbus city median, August 2026 (Apartment List)</span></td>
-    <td class="value">""");
-
-        html.append(medianRent);
-
-        html.append("""
-    </td>
-    <td><span class="status neutral">Reference</span></td>
-</tr>
-<tr>
-    <td>Columbus Home Price Index / መዐቀኒ ዋጋ ገዛ</td>
-    <td class="value">""");
-
-        html.append(String.format(Locale.US, "%.2f", homePriceIndex));
-
-        html.append("""
-    </td>
-    <td><span class="status neutral">Latest quarter:&nbsp;""");
-
-        html.append(hpiAsOf);
-
-        html.append("""
-    </span></td>
-</tr>
-<tr>
-    <td>U.S. Inflation / ዕቤት ዋጋ ኣመሪካ</td>
-    <td class="value">""");
-
-        html.append(String.format(Locale.US, "%.1f%%", inflation));
-
-        html.append("""
-    </td>
-    <td><span class="status caution">""");
-
-        html.append(inflationStatus);
-
-        html.append("""
-    </span></td>
-</tr>
-<tr>
-    <td>U.S. GDP Growth / ዕቤት GDP ኣመሪካ</td>
-    <td class="value">""");
-
-        html.append(String.format(Locale.US, "%.1f%%", gdp));
-
-        html.append("""
-    </td>
-    <td><span class="status good">""");
-
-        html.append(gdpStatus);
-
-        html.append("""
-    </span></td>
-</tr>
-<tr>
-    <td>Federal Funds Target Rate / ወለድ Federal Funds</td>
-    <td class="value">""");
-
-        html.append(fedValue);
-
-        html.append("<span class=\"src\">" + fedNote + "</span>");
-
-        html.append("""
-    </td>
-    <td><span class="status neutral">National / ሃገራዊ</span></td>
-</tr>
-</table>
-</div>
-
-<div class="section-title">
-    <div class="section-line"></div>
-    <h2>Market Direction / ኣንፈት ዕዳጋ</h2>
-</div>
-<div class="pulse">
-    <div class="pulse-item"><div class="pulse-arrow">↗</div><div class="pulse-label">Inventory / ክምችት</div><div class="pulse-word">Rising / ይውስኽ ኣሎ</div></div>
-    <div class="pulse-item"><div class="pulse-arrow">↗</div><div class="pulse-label">Buyer Leverage / ሓይሊ</div><div class="pulse-word">Improving / ይመሓየሽ ኣሎ</div></div>
-    <div class="pulse-item"><div class="pulse-arrow">→</div><div class="pulse-label">Prices / ዋጋታት</div><div class="pulse-word">Stable / ዝተረጋጋ</div></div>
-    <div class="pulse-item"><div class="pulse-arrow">""");
-
-        html.append(mortgageArrow);
-
-        html.append("""
-</div><div class="pulse-label">Mortgage Rates / ወለድ</div><div class="pulse-word">""");
-
-        html.append(mortgageWord);
-
-        html.append("""
-</div></div>
-    <div class="pulse-item"><div class="pulse-arrow">↘</div><div class="pulse-label">Affordability / ተመጣጣንነት</div><div class="pulse-word">Challenging / ኣሸጋሪ</div></div>
-</div>
-<div class="pulse-note">Arrows show the direction of change, not whether it is good or bad for buyers. Rising mortgage rates are worse for buyers. / ምልክታት ኣንፈት ለውጢ እዮም፣ ንገዛእቲ ጽቡቕ ወይ ሕማቕ ምዃኑ ኣየርኣዩን።</div>
-
-<div class="section-title">
-    <div class="section-line"></div>
-    <h2>What It Means / ትርጉሙ እንታይ እዩ?</h2>
-</div>
-<div class="meaning-box">
-    <div class="meaning-row meaning-green">🟢 <strong>Jobs: Healthy / ስራሕ፦ ጥዑይ</strong></div>
-    <div class="meaning-row meaning-green">🟢 <strong>Inventory: Improving / ኣቕርቦት፦ ይመሓየሽ ኣሎ</strong></div>
-    <div class="meaning-row meaning-green">🟢 <strong>Buyer leverage: Improving / ሓይሊ ገዛእቲ፦ ይመሓየሽ ኣሎ</strong></div>
-    <div class="meaning-row meaning-yellow">🟡 <strong>Prices: Mostly stable / ዋጋ፦ ብዙሕ ኣይተቐየረን</strong></div>
-    <div class="meaning-row meaning-red">🔴 <strong>Mortgage rates: High / ወለድ ሞርጌጅ፦ ልዑል</strong></div>
-    <div class="meaning-row meaning-orange">🟠 <strong>Affordability: Challenging / ዓቕሚ ክፍሊት፦ ኣሸጋሪ</strong></div>
-</div>
-
-<div class="section-title">
-    <div class="section-line"></div>
-    <h2>🏠 Bottom Line / ቀንዲ ነጥቢ</h2>
-</div>
-<div class="bottom-line">
-    <div class="bottom-line-title">Overall Outlook / ሓፈሻዊ ኣንፈት</div>
-    <p><strong>Conditions are improving for buyers, but high mortgage rates are still the biggest obstacle.</strong></p>
-    <p>ኩነታት ንገዛእቲ ገዛ በብቑሩብ ይሓይሽ ኣሎ፣ ግን ልዑል ወለድ ሞርጌጅ ገና ዓብዪ ዕንቅፋት እዩ።</p>
-</div>
-
-<div class="section-title">
-    <div class="section-line"></div>
-    <h2>Data Notes / ሓበሬታ ብዛዕባ ዳታ</h2>
-</div>
-<div class="note">
-    <p><strong>LIVE DATA:</strong> Economic indicators connected to the application are retrieved from FRED when the report is generated. Unemployment is for the Columbus, OH metro area (BLS, not seasonally adjusted). Inflation, GDP growth, the 30-year mortgage rate (Freddie Mac) and the federal funds rate are U.S. national figures.</p>
-    <p><strong>ቀጥታ ሓበሬታ:</strong> እቶም ናብ መተግበሪ ዝተኣሳሰሩ ኢኮኖሚያዊ መለክዒታት እቲ ሪፖርት ክፍጠር ከሎ ካብ FRED ይውሰዱ። ስራሕ ኣልቦነት ናይ ኮሎምበስን ከባብያን እዩ፣ ዕቤት ዋጋ፣ GDP፣ ወለድ ሞርጌጅን Federal Fundsን ሃገራዊ (ኣመሪካ) እዮም።</p>
-    <p><strong>CENTRAL OHIO MLS:</strong> The 6,193 inventory, 2.4 months supply and approximately 42-44 days on market are Central Ohio/local reference figures. They are not currently live-connected to FRED and may lag. The ~$350K home price is the Central Ohio median sales price for July 2026 (Columbus REALTORS&reg;). The ~$1,308 median rent is the Columbus city median for August 2026 (Apartment List).</p>
-    <p><strong>ምንጪ:</strong> ዋጋ ገዛ፣ ክራይ፣ ብዝሒ ገዛውቲ፣ ናይ ወርሒ ኣቕርቦትን መዓልታት ኣብ ዕዳጋን ካብ ማእከላይ ኦሃዮ ዝተወስዱ መወከሲ ሓበሬታ እዮም፣ ቀጥታ ካብ FRED ኣይኮኑን።</p>
-    <p><strong>ኣገዳሲ:</strong> Columbus city/area data and Central Ohio MLS data are kept separate. The Columbus Home Price Index is an index value, not a dollar home price.</p>
-    <p><strong>DATA AS OF / ዕለት ናይ ሓበሬታ:</strong> """);
-
-        html.append(asOfLine);
-
-        html.append("""
-</p>
-    <p>Some indicators are updated monthly or quarterly, so their latest observation can be weeks or months old. This report shows the latest available data, not real-time data.</p>
-    <p><strong>SCORES:</strong> The Economic Risk, Buyer Leverage and Affordability scores are Economic Watch indicators. They are not official government statistics.</p>
-    <p><strong>ነጥቢታት:</strong> እዞም ነጥቢታት ናይ Economic Watch መርእያታት እዮም፣ ወግዓዊ ስታቲስቲክስ ኣይኮኑን።</p>
-</div>
-</div>
-
-<div class="footer">
-    <div class="footer-brand">ECONOMIC WATCH</div>
-    <div class="footer-small">Columbus, Ohio • Automated Weekly Economic Report</div>
-    <div class="footer-small">ኢኮኖሚያዊ ምልከታ • ኮሎምበስ፣ ኦሃዮ • ሰሙናዊ ጸብጻብ</div>
-</div>
-</div>
-</body>
-</html>
-""");
-
-        return html.toString();
+        String unempText = String.format(Locale.US, "%.1f%%", unemployment);
+        String usUnempText = usUnempOk
+                ? String.format(Locale.US, "%.1f%%", usUnemployment)
+                : "n/a";
+        String mortgageText = String.format(Locale.US, "%.2f%%", mortgage);
+        String hpiText = String.format(Locale.US, "%.2f", homePriceIndex);
+
+        StringBuilder h = new StringBuilder();
+
+        h.append(HEAD);
+
+        // ---------- HEADER ----------
+        h.append("<tr><td class='hero'>");
+        h.append("<div class='logo'>ECONOMIC WATCH</div>");
+        h.append("<div class='h1'>Columbus Economic Snapshot</div>");
+        h.append("<div class='sub'>Columbus, Ohio &mdash; Local Economic &amp; Housing Monitor</div>");
+        h.append("<div class='sub ti-light'>ኮሎምበስ፣ ኦሃዮ — ኢኮኖሚያዊን ናይ ገዛን ምልከታ</div>");
+        h.append("<div class='heroline'><span class='badge'>WEEKLY REPORT / ሰሙናዊ ጸብጻብ</span>");
+        h.append("<span class='when'>Updated / ዝተሓደሰ: <b>").append(dateText).append("</b></span></div>");
+        h.append("<div class='sub small'>Latest available data, not real-time / ናይ ሕጂ ዝርከብ ሓበሬታ፣ ቀጥታ ኣይኮነን</div>");
+        h.append("</td></tr>");
+
+        h.append("<tr><td class='body'>");
+
+        // ---------- KEY INDICATORS ----------
+        h.append(section("Key Indicators", "ቀንዲ መለክዒታት"));
+        h.append("<table class='grid' role='presentation' width='100%' cellpadding='0' cellspacing='0'><tr>");
+        h.append(card("Columbus Metro Unemployment", "ስራሕ ኣልቦነት ኮሎምበስን ከባብያን",
+                unempText, "Columbus metro area &bull; " + asOf("COLU139URN", "month"), "#0f766e"));
+        h.append(card("U.S. Unemployment", "ስራሕ ኣልቦነት ኣመሪካ",
+                usUnempText, "National &bull; " + asOf("UNRATE", "month"), "#2563eb"));
+        h.append("</tr><tr>");
+        h.append(card("U.S. Mortgage Rate", "ወለድ ሞርጌጅ ኣመሪካ",
+                mortgageText, "30-year fixed &bull; " + asOf("MORTGAGE30US", "day"), "#c2410c"));
+        h.append(card("Home Price Index", "መዐቀኒ ዋጋ ገዛ",
+                hpiText, "Columbus HPI &bull; " + hpiAsOf, "#7c3aed"));
+        h.append("</tr></table>");
+
+        // ---------- JOBS & ECONOMY ----------
+        h.append(section("Jobs &amp; Economy", "ስራሕን ኢኮኖሚን"));
+        h.append(tableOpen());
+        h.append(row("Columbus Metro Unemployment", "ስራሕ ኣልቦነት ኮሎምበስን ከባብያን",
+                "Columbus, OH metro area, BLS, not seasonally adjusted",
+                "ኮሎምበስን ከባብያን፣ BLS፣ ብወቕቲ ዘይተመዓረየ",
+                unempText, "good", unemploymentStatus));
+        h.append(row("U.S. Unemployment", "ስራሕ ኣልቦነት ኣመሪካ",
+                "National rate, BLS", "ሃገራዊ መጠን፣ BLS",
+                usUnempText, "info", usUnempOk ? usUnemploymentStatus : "n/a"));
+        h.append(row("U.S. Inflation", "ዕቤት ዋጋ ኣመሪካ",
+                "CPI, " + asOf("CPIAUCSL", "month"), "CPI፣ ሃገራዊ",
+                String.format(Locale.US, "%.1f%%", inflation), "warn", inflationStatus));
+        h.append(row("U.S. GDP Growth", "ዕቤት GDP ኣመሪካ",
+                "Real GDP, " + asOf("A191RL1Q225SBEA", "quarter"), "ሓቀኛ GDP፣ ሃገራዊ",
+                String.format(Locale.US, "%.1f%%", gdp), "good", gdpStatus));
+        h.append(row("U.S. 30-Year Mortgage Rate", "ወለድ ሞርጌጅ ኣመሪካ",
+                "Freddie Mac, " + asOf("MORTGAGE30US", "day"), "Freddie Mac፣ ሃገራዊ",
+                mortgageText, "bad", mortgageStatus));
+        h.append(row("Federal Funds Target Rate", "ወለድ Federal Funds",
+                fedNoteEn, fedNoteTi,
+                fedValue, "neutral", "National / ሃገራዊ"));
+        h.append("</table>");
+
+        // ---------- HOUSING ----------
+        h.append(section("Housing Market", "ዕዳጋ ገዛ"));
+        h.append(tableOpen());
+        h.append(row("Columbus Home Price Index", "መዐቀኒ ዋጋ ገዛ ኮሎምበስ",
+                "Index value, not a dollar price", "መዐቀኒ እዩ፣ ዶላር ዋጋ ኣይኮነን",
+                hpiText, "neutral", "Latest: " + hpiAsOf + " / ሓድሽ"));
+        h.append(row("Home Price", "ዋጋ ገዛ",
+                "Median sale price, Central Ohio, July 2026 (Columbus REALTORS&reg;)",
+                "ማእከላይ ዋጋ መሸጣ፣ ማእከላይ ኦሃዮ፣ ሓምለ 2026",
+                homePriceReference, "neutral", "Stable / ዝተረጋጋ"));
+        h.append(row("Median Rent", "ማእከላይ ክራይ",
+                "Columbus city median, August 2026 (Apartment List)",
+                "ማእከላይ ክራይ ከተማ ኮሎምበስ፣ ነሓሰ 2026",
+                medianRent, "neutral", "Reference / መወከሲ"));
+        h.append(row("Central Ohio Inventory", "ብዝሒ ዘሎ ገዛውቲ",
+                "Central Ohio MLS reference figure, not live",
+                "ናይ ማእከላይ ኦሃዮ MLS መወከሲ ቁጽሪ፣ ቀጥታ ኣይኮነን",
+                String.format(Locale.US, "%,d", centralOhioInventory), "info", "Improving / ይውስኽ ኣሎ"));
+        h.append(row("Months Supply", "ናይ ወርሒ ኣቕርቦት",
+                "Central Ohio MLS reference figure, not live",
+                "ናይ ማእከላይ ኦሃዮ MLS መወከሲ ቁጽሪ፣ ቀጥታ ኣይኮነን",
+                String.format(Locale.US, "%.1f months", monthsSupply), "warn", "Low supply / ውሑድ ኣቕርቦት"));
+        h.append(row("Days on Market", "ኣብ ዕዳጋ ዝጸንሓሉ መዓልታት",
+                "Central Ohio MLS reference figure, not live",
+                "ናይ ማእከላይ ኦሃዮ MLS መወከሲ ቁጽሪ፣ ቀጥታ ኣይኮነን",
+                daysOnMarket, "info", "Improving / ይመሓየሽ ኣሎ"));
+        h.append("</table>");
+
+        // ---------- SCORES ----------
+        h.append(section("Economic Watch Scores", "ነጥቢታት Economic Watch"));
+        h.append(tableOpen());
+        h.append(row("Economic Risk Score", "ነጥቢ ኢኮኖሚያዊ ሓደጋ",
+                "Economic Watch indicator, not an official statistic",
+                "ናይ Economic Watch መርኣዪ፣ ወግዓዊ ስታቲስቲክስ ኣይኮነን",
+                economicRisk + "/100", "good", "Low / ትሑት"));
+        h.append(row("Buyer Leverage Score", "ነጥቢ ሓይሊ ገዛእቲ ገዛ",
+                "Economic Watch indicator, not an official statistic",
+                "ናይ Economic Watch መርኣዪ፣ ወግዓዊ ስታቲስቲክስ ኣይኮነን",
+                buyerLeverage + "/100", "info", "Improving / ይመሓየሽ ኣሎ"));
+        h.append(row("Affordability Score", "ነጥቢ ዓቕሚ ክፍሊት",
+                "Economic Watch indicator, not an official statistic",
+                "ናይ Economic Watch መርኣዪ፣ ወግዓዊ ስታቲስቲክስ ኣይኮነን",
+                affordability + "/100", "orange", "Challenging / ኣሸጋሪ"));
+        h.append("</table>");
+
+        // ---------- MARKET DIRECTION ----------
+        h.append(section("Market Direction", "ኣንፈት ዕዳጋ"));
+        h.append("<table class='pulse' role='presentation' width='100%' cellpadding='0' cellspacing='0'><tr>");
+        h.append(pulse("&#8599;", "Inventory", "ክምችት", "Rising / ይውስኽ ኣሎ"));
+        h.append(pulse("&#8599;", "Buyer Leverage", "ሓይሊ ገዛእቲ", "Improving / ይመሓየሽ ኣሎ"));
+        h.append(pulse("&rarr;", "Prices", "ዋጋታት", "Stable / ዝተረጋጋ"));
+        h.append(pulse(mortgageArrow, "Mortgage Rates", "ወለድ ሞርጌጅ", mortgageWord));
+        h.append(pulse("&#8600;", "Affordability", "ተመጣጣንነት", "Challenging / ኣሸጋሪ"));
+        h.append("</tr></table>");
+        h.append("<div class='fine'>Arrows show the direction of change, not whether it is good or bad for buyers. Rising mortgage rates are worse for buyers.<br>");
+        h.append("ምልክታት ኣንፈት ለውጢ እዮም፣ ንገዛእቲ ጽቡቕ ወይ ሕማቕ ምዃኑ ኣየርኣዩን።</div>");
+
+        // ---------- WHAT IT MEANS ----------
+        h.append(section("What It Means", "ትርጉሙ እንታይ እዩ?"));
+        h.append(meaning("good", "🟢", "Jobs: Healthy", "ስራሕ፦ ጥዑይ"));
+        h.append(meaning("good", "🟢", "Inventory: Improving", "ኣቕርቦት፦ ይመሓየሽ ኣሎ"));
+        h.append(meaning("good", "🟢", "Buyer leverage: Improving", "ሓይሊ ገዛእቲ፦ ይመሓየሽ ኣሎ"));
+        h.append(meaning("warn", "🟡", "Prices: Mostly stable", "ዋጋ፦ ብዙሕ ኣይተቐየረን"));
+        h.append(meaning("bad", "🔴", "Mortgage rates: High", "ወለድ ሞርጌጅ፦ ልዑል"));
+        h.append(meaning("orange", "🟠", "Affordability: Challenging", "ዓቕሚ ክፍሊት፦ ኣሸጋሪ"));
+
+        // ---------- BOTTOM LINE ----------
+        h.append(section("Bottom Line", "ቀንዲ ነጥቢ"));
+        h.append("<div class='bottom'>");
+        h.append("<div class='bl-title'>Overall Outlook / ሓፈሻዊ ኣንፈት</div>");
+        h.append("<div class='bl-en'>Conditions are improving for buyers, but high mortgage rates are still the biggest obstacle.</div>");
+        h.append("<div class='bl-ti'>ኩነታት ንገዛእቲ ገዛ በብቑሩብ ይሓይሽ ኣሎ፣ ግን ልዑል ወለድ ሞርጌጅ ገና ዓብዪ ዕንቅፋት እዩ።</div>");
+        h.append("</div>");
+
+        // ---------- DATA NOTES ----------
+        h.append(section("Data Notes", "ሓበሬታ ብዛዕባ ዳታ"));
+        h.append("<div class='notes'>");
+
+        h.append(note("LIVE DATA",
+                "Indicators connected to the application are retrieved from FRED when the report is generated. "
+                        + "Columbus unemployment is for the Columbus, OH metro area (BLS, not seasonally adjusted), "
+                        + "not only the city. U.S. unemployment, inflation, GDP growth, the 30-year mortgage rate "
+                        + "(Freddie Mac) and the federal funds rate are national figures.",
+                "ቀጥታ ሓበሬታ",
+                "ናብ መተግበሪ ዝተኣሳሰሩ መለክዒታት እቲ ጸብጻብ ክፍጠር ከሎ ካብ FRED ይውሰዱ። ስራሕ ኣልቦነት ኮሎምበስ ናይ ኮሎምበስን ከባብያን (BLS፣ ብወቕቲ ዘይተመዓረየ) እዩ፣ ከተማ ጥራይ ኣይኮነን። "
+                        + "ስራሕ ኣልቦነት ኣመሪካ፣ ዕቤት ዋጋ፣ GDP፣ ወለድ ሞርጌጅን Federal Fundsን ሃገራዊ (ኣመሪካ) እዮም።"));
+
+        h.append(note("CENTRAL OHIO REFERENCE FIGURES",
+                "The 6,193 inventory, 2.4 months supply and approximately 42-44 days on market are Central Ohio MLS "
+                        + "reference figures. They are not live-connected to FRED and may lag. The ~$350K home price is the "
+                        + "Central Ohio median sales price for July 2026 (Columbus REALTORS&reg;). The ~$1,308 median rent "
+                        + "is the Columbus city median for August 2026 (Apartment List).",
+                "ናይ ማእከላይ ኦሃዮ መወከሲ ቁጽርታት",
+                "ዋጋ ገዛ፣ ክራይ፣ ብዝሒ ገዛውቲ፣ ናይ ወርሒ ኣቕርቦትን መዓልታት ኣብ ዕዳጋን ካብ ማእከላይ ኦሃዮ ዝተወስዱ መወከሲ ሓበሬታ እዮም፣ ቀጥታ ካብ FRED ኣይኮኑን፣ ክደንጉዩ ይኽእሉ።"));
+
+        h.append(note("IMPORTANT",
+                "Columbus metro data and Central Ohio MLS data are kept separate. "
+                        + "The Columbus Home Price Index is an index value, not a dollar home price.",
+                "ኣገዳሲ",
+                "ሓበሬታ ኮሎምበስን ከባብያን ን MLS ማእከላይ ኦሃዮን ፈላዪ እዩ። መዐቀኒ ዋጋ ገዛ ኮሎምበስ መዐቀኒ እዩ፣ ዶላር ዋጋ ገዛ ኣይኮነን።"));
+
+        h.append(note("DATA AS OF",
+                "Columbus unemployment: " + asOf("COLU139URN", "month")
+                        + " &bull; U.S. unemployment: " + asOf("UNRATE", "month")
+                        + " &bull; Columbus HPI: " + hpiAsOf
+                        + " &bull; U.S. GDP growth: " + asOf("A191RL1Q225SBEA", "quarter")
+                        + " &bull; U.S. CPI inflation: " + asOf("CPIAUCSL", "month")
+                        + " &bull; U.S. 30-year mortgage rate: " + asOf("MORTGAGE30US", "day")
+                        + " &bull; Federal funds rate: " + asOf("DFF", "day"),
+                "ዕለት ናይ ሓበሬታ",
+                "ኣብ ላዕሊ ዘሎ ዕለት ናይ ነፍሲ ወከፍ መለክዒ ናይ መወዳእታ ዝርከብ ምስትንታን እዩ።"));
+
+        h.append(note("LATEST AVAILABLE, NOT REAL-TIME",
+                "Some indicators are updated monthly or quarterly, so their latest observation can be weeks or months old.",
+                "ናይ ሕጂ ዝርከብ፣ ቀጥታ ኣይኮነን",
+                "ገለ መለክዒታት ብወርሒ ወይ ብርብዒ ዓመት እዮም ዝሕደሱ፣ ስለዚ ናይ መወዳእታ ሓበሬታ ሳምንታት ወይ ወሩኻት ዝገደመ ክኸውን ይኽእል።"));
+
+        h.append(note("SCORES",
+                "The Economic Risk, Buyer Leverage and Affordability scores are Economic Watch indicators. "
+                        + "They are not official government statistics.",
+                "ነጥቢታት",
+                "እዞም ነጥቢታት ናይ Economic Watch መርእያታት እዮም፣ ወግዓዊ ስታቲስቲክስ ኣይኮኑን።"));
+
+        h.append("</div>");
+
+        h.append("</td></tr>");
+
+        // ---------- FOOTER ----------
+        h.append("<tr><td class='foot'>");
+        h.append("<div class='brand'>ECONOMIC WATCH</div>");
+        h.append("<div>Columbus, Ohio &bull; Automated Weekly Economic Report</div>");
+        h.append("<div>ኢኮኖሚያዊ ምልከታ • ኮሎምበስ፣ ኦሃዮ • ሰሙናዊ ጸብጻብ</div>");
+        h.append("</td></tr>");
+
+        h.append("</table></td></tr></table></body></html>");
+
+        return h.toString();
+    }
+
+    // ------------------------------------------------------------------
+    // HTML helpers
+    // ------------------------------------------------------------------
+
+    private static String section(String en, String ti) {
+        return "<div class='sec'><span class='sec-en'>" + en
+                + "</span><span class='sec-ti'>" + ti + "</span></div>";
+    }
+
+    private static String card(String en, String ti, String value,
+                               String note, String color) {
+        return "<td class='col' width='50%' valign='top'>"
+                + "<div class='card'>"
+                + "<div class='c-en'>" + en + "</div>"
+                + "<div class='c-ti'>" + ti + "</div>"
+                + "<div class='c-val'>" + value + "</div>"
+                + "<div class='c-note'>" + note + "</div>"
+                + "</div></td>";
+    }
+
+    private static String tableOpen() {
+        return "<table class='data' role='presentation' width='100%' cellpadding='0' cellspacing='0'>";
+    }
+
+    private static String row(String en, String ti, String srcEn, String srcTi,
+                              String value, String cls, String status) {
+        return "<tr>"
+                + "<td class='lbl'><div class='l-en'>" + en + "</div>"
+                + "<div class='l-ti'>" + ti + "</div>"
+                + "<div class='src'>" + srcEn + "<br>" + srcTi + "</div></td>"
+                + "<td class='val'>" + value + "</td>"
+                + "<td class='st'><span class='pill " + cls + "'>" + status + "</span></td>"
+                + "</tr>";
+    }
+
+    private static String pulse(String arrow, String en, String ti, String word) {
+        return "<td class='pcell' width='20%' valign='top'>"
+                + "<div class='p-arrow'>" + arrow + "</div>"
+                + "<div class='p-en'>" + en + "</div>"
+                + "<div class='p-ti'>" + ti + "</div>"
+                + "<div class='p-word'>" + word + "</div></td>";
+    }
+
+    private static String meaning(String cls, String dot, String en, String ti) {
+        return "<div class='mean " + cls + "'><b>" + en + "</b>"
+                + "<span class='m-ti'>" + ti + "</span></div>";
+    }
+
+    private static String note(String titleEn, String bodyEn,
+                               String titleTi, String bodyTi) {
+        return "<div class='n-block'>"
+                + "<div class='n-en'><b>" + titleEn + ":</b> " + bodyEn + "</div>"
+                + "<div class='n-ti'><b>" + titleTi + ":</b> " + bodyTi + "</div>"
+                + "</div>";
     }
 
     /**
@@ -548,4 +419,96 @@ tr:nth-child(even) td { background: #fafafa; }
             return "n/a";
         }
     }
+
+    // ------------------------------------------------------------------
+    // Page head and styles
+    // ------------------------------------------------------------------
+
+    private static final String HEAD = """
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Economic Watch - Columbus, Ohio</title>
+<style>
+body { margin:0; padding:0; background:#f1f3f6; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; color:#1f2937; line-height:1.5; }
+table { border-collapse:collapse; }
+.wrap { max-width:720px; width:100%; background:#ffffff; border:1px solid #d5dbe3; }
+.hero { background:#14233a; color:#ffffff; padding:30px 30px 24px; border-bottom:3px solid #b8924a; }
+.logo { font-size:11px; font-weight:700; letter-spacing:3px; color:#c9b27c; }
+.h1 { margin-top:10px; font-family:Georgia,'Times New Roman',serif; font-size:28px; font-weight:700; line-height:1.2; }
+.sub { margin-top:6px; font-size:13px; color:#cbd5e1; }
+.ti-light { color:#b6c2d4; }
+.small { font-size:11px; color:#94a3b8; margin-top:14px; }
+.heroline { margin-top:18px; }
+.badge { display:inline-block; border:1px solid #c9b27c; color:#e8d9b0; font-size:10px; font-weight:700; letter-spacing:1px; padding:4px 10px; margin-right:12px; }
+.when { font-size:12px; color:#cbd5e1; }
+.when b { color:#ffffff; }
+.body { padding:4px 28px 28px; }
+.sec { margin:30px 0 14px; padding-bottom:6px; border-bottom:1px solid #14233a; }
+.sec-en { font-family:Georgia,'Times New Roman',serif; font-size:17px; font-weight:700; color:#14233a; }
+.sec-ti { font-size:13px; font-weight:600; color:#64748b; margin-left:10px; }
+.grid { table-layout:fixed; }
+.col { padding:0 6px 12px; }
+.card { background:#ffffff; border:1px solid #d5dbe3; border-left:3px solid #14233a; padding:14px 16px; }
+.c-en { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.8px; color:#475569; }
+.c-ti { font-size:12px; color:#64748b; margin-top:2px; }
+.c-val { font-family:Georgia,'Times New Roman',serif; font-size:32px; font-weight:700; color:#14233a; margin-top:8px; line-height:1.1; }
+.c-note { font-size:11px; color:#64748b; margin-top:6px; }
+.data { border:1px solid #d5dbe3; }
+.data td { padding:11px 14px; border-bottom:1px solid #e5e9ef; vertical-align:middle; }
+.data tr:last-child td { border-bottom:none; }
+.data tr:nth-child(even) td { background:#f8fafc; }
+.lbl { width:52%; }
+.l-en { font-size:14px; font-weight:600; color:#1f2937; }
+.l-ti { font-size:12px; color:#64748b; }
+.src { font-size:10px; color:#8794a6; margin-top:4px; line-height:1.4; }
+.val { font-family:Georgia,'Times New Roman',serif; font-size:17px; font-weight:700; color:#14233a; white-space:nowrap; }
+.st { text-align:right; }
+.pill { display:inline-block; padding:3px 9px; font-size:10px; font-weight:700; letter-spacing:0.2px; border-radius:2px; }
+.good { background:#e7f1ec; color:#276749; }
+.info { background:#e6eef7; color:#2c5282; }
+.warn { background:#fbf3e0; color:#8a6116; }
+.bad { background:#f8e7e6; color:#9b2c2c; }
+.orange { background:#faece0; color:#9c4a14; }
+.neutral { background:#eef0f3; color:#4b5563; }
+.pulse td { text-align:center; padding:12px 4px; background:#ffffff; border:1px solid #d5dbe3; }
+.p-arrow { font-size:20px; font-weight:700; color:#14233a; }
+.p-en { font-size:11px; font-weight:700; color:#1f2937; margin-top:4px; }
+.p-ti { font-size:10px; color:#64748b; }
+.p-word { font-size:10px; color:#64748b; margin-top:4px; }
+.fine { font-size:11px; color:#8794a6; margin-top:10px; }
+.mean { padding:10px 14px; margin-bottom:6px; font-size:14px; background:#f8fafc; border:1px solid #e5e9ef; border-left-width:4px; color:#1f2937; }
+.m-ti { display:block; font-size:12px; color:#64748b; }
+.mean.good { border-left-color:#276749; }
+.mean.warn { border-left-color:#b7791f; }
+.mean.bad { border-left-color:#9b2c2c; }
+.mean.orange { border-left-color:#c05621; }
+.bottom { background:#f8fafc; border:1px solid #d5dbe3; border-left:4px solid #b8924a; padding:20px 22px; }
+.bl-title { font-size:10px; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; color:#8a6d2f; }
+.bl-en { font-family:Georgia,'Times New Roman',serif; font-size:17px; font-weight:700; color:#14233a; margin-top:8px; }
+.bl-ti { font-size:13px; margin-top:8px; color:#475569; }
+.notes { border-top:1px solid #d5dbe3; padding-top:6px; }
+.n-block { margin-bottom:12px; padding-bottom:12px; border-bottom:1px solid #e5e9ef; font-size:11px; color:#475569; }
+.n-block:last-child { margin-bottom:0; padding-bottom:0; border-bottom:none; }
+.n-ti { margin-top:5px; color:#64748b; }
+.foot { background:#14233a; text-align:center; padding:22px 16px; font-size:11px; color:#94a3b8; }
+.brand { font-size:12px; font-weight:700; letter-spacing:3px; color:#c9b27c; margin-bottom:6px; }
+@media (max-width:600px) {
+  .col { display:block; width:100% !important; padding:0 0 12px; }
+  .body { padding:2px 14px 24px; }
+  .hero { padding:22px 18px 18px; }
+  .h1 { font-size:23px; }
+  .lbl { width:auto; }
+  .st { display:block; text-align:left; padding-top:0 !important; }
+  .sec-ti { display:block; margin-left:0; }
+  .pulse td { display:inline-block; width:46% !important; margin:2px; }
+}
+</style>
+</head>
+<body>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="padding:24px 10px;">
+<table role="presentation" class="wrap" cellpadding="0" cellspacing="0">
+""";
 }
