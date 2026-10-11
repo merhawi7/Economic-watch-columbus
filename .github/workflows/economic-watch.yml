@@ -1,4 +1,4 @@
-name: Economic Watch weekly report
+﻿name: Economic Watch weekly report
 
 on:
   schedule:
