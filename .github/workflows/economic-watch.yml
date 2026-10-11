@@ -2,7 +2,7 @@ name: Economic Watch weekly report
 
 on:
   schedule:
-    - cron: '17 13 * * 1'
+    - cron: '30 12 * * 1'
   workflow_dispatch:
 
 jobs:
